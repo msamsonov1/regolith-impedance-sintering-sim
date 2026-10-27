@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RegoMelt &bull; NASA SBIR/STTR In-Situ Microwave Sintering Auditor</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- Three.js for 3D Cavity & Melt Front Simulation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  
+  <!-- Chart.js for Multi-Physics (E, Z) S-Curve Tracking -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- KaTeX for Scientific Formulation Rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"
+          onload="renderMathInElement(document.body, {
+            delimiters: [
+              {left: '$$', right: '$$', display: true},
+              {left: '$', right: '$', display: false}
+            ],
+            throwOnError: false
+          });"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            lunar: {
+              950: '#06080d',
+              900: '#0c101a',
+              850: '#111726',
+              800: '#1a2236',
+              700: '#27344f',
+              400: '#738aa6',
+              300: '#9cb1cc',
+              100: '#e2ebf7'
+            },
+            plasma: {
+              amber: '#f59e0b',
+              orange: '#ff6600',
+              cyan: '#06b6d4',
+              emerald: '#10b981',
+              rose: '#f43f5e'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    .glow-amber {
+      box-shadow: 0 0 25px rgba(245, 158, 11, 0.25);
+    }
+    .grid-bg {
+      background-size: 30px 30px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    }
+    canvas { outline: none; }
+    /* Scrollbars */
+    ::-webkit-scrollbar { width: 7px; height: 7px; }
+    ::-webkit-scrollbar-track { background: #0c101a; }
+    ::-webkit-scrollbar-thumb { background: #1a2236; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #27344f; }
+  </style>
+</head>
+<body class="bg-lunar-950 text-slate-100 font-sans min-h-screen selection:bg-amber-500 selection:text-black flex flex-col">
+
+  <!-- Floating Toast Notification -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none bg-lunar-900/95 border border-amber-500/50 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 text-sm font-mono">
+    <div class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></div>
+    <span id="toastMsg">Action completed successfully.</span>
+  </div>
+
+  <!-- Navigation Bar -->
+  <nav class="sticky top-0 z-40 bg-lunar-950/90 backdrop-blur-md border-b border-lunar-800 px-4 sm:px-8 py-3.5">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      
+      <!-- Logo & Brand Header -->
+      <div class="flex items-center gap-3">
+        <div class="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-orange-600 to-cyan-500 shadow-lg shadow-orange-950/50">
+          <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-black tracking-tight text-lg text-white">Rego<span class="text-amber-400">Melt</span></span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium tracking-wide bg-amber-950 text-amber-300 border border-amber-700/60">NASA SBIR TX07.01</span>
+          </div>
+          <p class="text-[11px] text-lunar-400 font-mono">Lunar Regolith Microwave Sintering Complex Impedance Auditor</p>
+        </div>
+      </div>
+
+      <!-- Tab Switcher -->
+      <div class="hidden md:flex items-center gap-1.5 p-1 bg-lunar-900 border border-lunar-800 rounded-xl text-xs font-medium">
+        <button onclick="switchTab('simulation')" id="tabBtn-simulation" class="px-4 py-2 rounded-lg bg-amber-500 text-black font-semibold shadow-sm transition">
+          Interactive Digital Twin
+        </button>
+        <button onclick="switchTab('proposal')" id="tabBtn-proposal" class="px-4 py-2 rounded-lg text-lunar-300 hover:text-white hover:bg-lunar-800/60 transition">
+          Full NASA SBIR Document ($225k)
+        </button>
+        <button onclick="switchTab('partnership')" id="tabBtn-partnership" class="px-4 py-2 rounded-lg text-lunar-300 hover:text-white hover:bg-lunar-800/60 transition flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          ISRU Hardware Lab Co-Op
+        </button>
+      </div>
+
+      <!-- Action Call -->
+      <div class="flex items-center gap-2.5">
+        <button onclick="switchTab('partnership')" class="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-black font-bold text-xs px-4 py-2 rounded-lg shadow-md shadow-amber-600/20 transition flex items-center gap-1.5">
+          <span>Partner With Us</span>
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Mobile Tab Row -->
+  <div class="md:hidden flex border-b border-lunar-800 bg-lunar-900 px-4 py-2 overflow-x-auto gap-2 text-xs">
+    <button onclick="switchTab('simulation')" id="mTabBtn-simulation" class="px-3 py-1.5 rounded-lg bg-amber-500 text-black font-bold whitespace-nowrap">Digital Twin</button>
+    <button onclick="switchTab('proposal')" id="mTabBtn-proposal" class="px-3 py-1.5 rounded-lg text-lunar-300 hover:bg-lunar-800 whitespace-nowrap">NASA Proposal</button>
+    <button onclick="switchTab('partnership')" id="mTabBtn-partnership" class="px-3 py-1.5 rounded-lg text-lunar-300 hover:bg-lunar-800 whitespace-nowrap">ISRU Lab Co-Op</button>
+  </div>
+
+  <!-- Hero Banner: Clarifying Role & Scientific Objective -->
+  <section class="border-b border-lunar-800 bg-gradient-to-b from-lunar-900/80 to-lunar-950 px-4 sm:px-8 py-8 sm:py-10 grid-bg relative">
+    <div class="max-w-7xl mx-auto flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+      <div class="max-w-3xl">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono font-medium mb-3">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
+          NASA SBIR/STTR ARCHITECTURE &bull; MULTI-PHYSICS SOFTWARE SEEKING EXPERIMENTAL CAVITY LABS
+        </div>
+        <h1 class="text-2xl sm:text-4xl font-black text-white tracking-tight leading-tight">
+          We Solved the Closed-Loop $(E, Z)$ Impedance Auditor.<br/>
+          <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-400 to-cyan-300">
+            Now We Need High-Temperature Cavity Labs to Sinter the Regolith.
+          </span>
+        </h1>
+        <p class="mt-3 text-sm sm:text-base text-lunar-300 leading-relaxed">
+          <strong>RegoMelt</strong> is an advanced in-situ resource utilization (ISRU) software digital twin and real-time microwave cavity controller. Raw lunar dust contains sub-micron nanophase metallic iron ($np\text{-}\text{Fe}^0$) that drives dielectric loss. By monitoring the complex high-temperature dielectric impedance ($Z$) along its non-linear sigmoidal decline against cumulative absorbed microwave energy ($E$), RegoMelt detects internal voids and thermal clumping before structural micro-fractures occur—ensuring habitat blocks and landing pads exceed NASA's <strong class="text-emerald-400">>30 MPa</strong> compressive strength requirement.
+        </p>
+      </div>
+
+      <!-- Key Parameters Grid -->
+      <div class="grid grid-cols-2 gap-3 w-full lg:w-auto shrink-0 font-mono">
+        <div class="bg-lunar-900/90 border border-lunar-800 p-3.5 rounded-xl">
+          <div class="text-[11px] text-lunar-400">Resonant RF Frequency</div>
+          <div class="text-xl font-bold text-amber-400 mt-0.5">2.450 GHz</div>
+          <div class="text-[10px] text-lunar-400">ISM Volumetric Band</div>
+        </div>
+        <div class="bg-lunar-900/90 border border-lunar-800 p-3.5 rounded-xl">
+          <div class="text-[11px] text-lunar-400">Target Mineral Spec</div>
+          <div class="text-xl font-bold text-cyan-400 mt-0.5">0.58 wt% Fe⁰</div>
+          <div class="text-[10px] text-lunar-400">Nanophase Mare Simulant</div>
+        </div>
+        <div class="bg-lunar-900/90 border border-lunar-800 p-3.5 rounded-xl">
+          <div class="text-[11px] text-lunar-400">Compressive Threshold</div>
+          <div class="text-xl font-bold text-emerald-400 mt-0.5">>30.0 MPa</div>
+          <div class="text-[10px] text-lunar-400">NASA Flight Hab Spec</div>
+        </div>
+        <div class="bg-lunar-900/90 border border-lunar-800 p-3.5 rounded-xl">
+          <div class="text-[11px] text-lunar-400">Phase I Award Target</div>
+          <div class="text-xl font-bold text-amber-400 mt-0.5">$225,000</div>
+          <div class="text-[10px] text-lunar-400">Subtopic TX07.01 / TX12.01</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 1: INTERACTIVE DIGITAL TWIN & SIMULATION -->
+  <main id="tab-simulation" class="tab-content flex-1 max-w-7xl mx-auto w-full px-4 sm:px-8 py-8 space-y-8">
+    
+    <!-- Simulation Top Banner -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-xl bg-lunar-900/90 border border-lunar-800">
+      <div>
+        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+          <span>Digital Twin: 3D Microwave Sintering Cavity & $(E, Z)$ Auditor</span>
+          <span class="text-xs px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800 font-mono">RegoMelt Kernel v3.4</span>
+        </h2>
+        <p class="text-xs text-lunar-400 font-mono">Simulate multi-mode standing waves, volumetric dielectric heating, void degassing, and auto-tuning magnetron shunting.</p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button onclick="injectAnomaly('void')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-amber-950/60 hover:bg-amber-900 border border-amber-700/60 text-amber-300 transition flex items-center gap-1.5 font-mono">
+          <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+          Inject Internal Void (Z-Stall)
+        </button>
+        <button onclick="injectAnomaly('runaway')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-rose-950/60 hover:bg-rose-900 border border-rose-700/60 text-rose-300 transition flex items-center gap-1.5 font-mono">
+          <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+          Thermal Runaway Flash
+        </button>
+        <button onclick="resetSimulation()" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-lunar-800 hover:bg-lunar-700 text-slate-300 border border-lunar-700 transition font-mono">
+          Reset Run
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Simulator Grid: 3D Viewport on Left, Parameter Controls & Graphs on Right -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      
+      <!-- 3D Cavity Canvas Box (7 cols) -->
+      <div class="lg:col-span-7 bg-lunar-900/90 border border-lunar-800 rounded-2xl overflow-hidden flex flex-col shadow-xl">
+        <div class="px-4 py-3 bg-lunar-950/80 border-b border-lunar-800 flex items-center justify-between">
+          <div class="flex items-center gap-2 text-xs font-mono text-slate-300">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            3D Electromagnetic Cavity &amp; Regolith Melt Front
+          </div>
+          <div class="text-[11px] text-lunar-400 font-mono">
+            Click &amp; Drag to Rotate &bull; Scroll to Zoom
+          </div>
+        </div>
+        
+        <!-- 3D Container -->
+        <div class="relative w-full h-[400px] sm:h-[460px] bg-black">
+          <div id="three-container" class="w-full h-full cursor-grab active:cursor-grabbing"></div>
+          
+          <!-- On-Canvas Telemetry HUD -->
+          <div class="absolute top-3 left-3 bg-lunar-900/90 backdrop-blur-md border border-lunar-700 p-3.5 rounded-xl text-xs font-mono space-y-1.5 pointer-events-none shadow-lg">
+            <div class="text-lunar-400">Core Temp ($T_{core}$): <span id="hud-temp" class="text-amber-400 font-bold">295 K</span></div>
+            <div class="text-lunar-400">Absorbed Energy ($E$): <span id="hud-energy" class="text-cyan-400 font-bold">0.00 kJ/cm³</span></div>
+            <div class="text-lunar-400">Complex Dielectric ($|Z|$): <span id="hud-impedance" class="text-amber-300 font-bold">1250.0 Ω</span></div>
+            <div class="text-lunar-400">Melt Consolidation: <span id="hud-density" class="text-emerald-400 font-bold">1.45 g/cm³</span></div>
+            <div class="text-lunar-400">Cavity Status: <span id="hud-status" class="text-emerald-400 font-bold">RESONANCE NOMINAL</span></div>
+          </div>
+
+          <!-- Color Key Bar -->
+          <div class="absolute bottom-3 right-3 flex items-center gap-2 bg-lunar-950/90 p-2 rounded-lg border border-lunar-800 text-[10px] text-lunar-400 font-mono">
+            <span class="inline-block w-3 h-3 rounded bg-blue-600"></span> Raw Dust
+            <span class="inline-block w-3 h-3 rounded bg-amber-500 ml-2"></span> Sintering
+            <span class="inline-block w-3 h-3 rounded bg-orange-600 ml-2"></span> Dense Basalt Glass
+            <span class="inline-block w-3 h-3 rounded bg-cyan-400 ml-2"></span> RF Standing Wave
+          </div>
+        </div>
+
+        <div class="p-4 bg-lunar-950/60 border-t border-lunar-800 text-xs text-lunar-300 flex flex-wrap justify-between gap-2 font-mono">
+          <span>Volumetric heating originates at core due to $np\text{-}\text{Fe}^0$ localized dipolar absorption.</span>
+          <span class="text-amber-400 font-medium">Auto-Tuning Closed Loop Active</span>
+        </div>
+      </div>
+
+      <!-- Controls & Multi-Physics Readout (5 cols) -->
+      <div class="lg:col-span-5 space-y-6">
+        
+        <!-- Parameter Sliders Box -->
+        <div class="bg-lunar-900/90 border border-lunar-800 p-5 rounded-2xl shadow-xl space-y-4">
+          <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono text-amber-400 flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+            Cavity Controls &amp; Mineralogy
+          </h3>
+
+          <!-- Nanophase Iron Concentration Slider -->
+          <div>
+            <div class="flex justify-between text-xs font-mono mb-1">
+              <span class="text-slate-300">Nanophase Iron ($np\text{-}\text{Fe}^0$)</span>
+              <span id="val-iron" class="text-amber-400 font-bold">0.58 wt%</span>
+            </div>
+            <input id="slider-iron" type="range" min="0.10" max="1.50" value="0.58" step="0.02" 
+                   oninput="updateMineralogy()"
+                   class="w-full h-1.5 bg-lunar-800 rounded-lg appearance-none cursor-pointer accent-amber-500">
+            <div class="flex justify-between text-[10px] text-lunar-400 font-mono mt-1">
+              <span>0.10 wt% (Highland Anorthosite)</span>
+              <span>0.58 wt% (Mare Simulant)</span>
+              <span>1.50 wt% (Agglutinate Heavy)</span>
+            </div>
+          </div>
+
+          <!-- Microwave Power Slider -->
+          <div>
+            <div class="flex justify-between text-xs font-mono mb-1">
+              <span class="text-slate-300">Magnetron Output Power</span>
+              <span id="val-power" class="text-cyan-400 font-bold">3.2 kW</span>
+            </div>
+            <input id="slider-power" type="range" min="0.8" max="6.0" value="3.2" step="0.1" 
+                   oninput="updatePower()"
+                   class="w-full h-1.5 bg-lunar-800 rounded-lg appearance-none cursor-pointer accent-cyan-500">
+            <div class="flex justify-between text-[10px] text-lunar-400 font-mono mt-1">
+              <span>0.8 kW (Slow Consolidation)</span>
+              <span>3.2 kW (Nominal)</span>
+              <span>6.0 kW (Rapid High-Yield)</span>
+            </div>
+          </div>
+
+          <!-- Auto-Tuning Closed-Loop Toggle -->
+          <div class="p-3 bg-lunar-950/80 border border-lunar-800 rounded-xl flex items-center justify-between">
+            <div>
+              <div class="text-xs font-semibold text-white">Closed-Loop Auto-Tune</div>
+              <div class="text-[11px] text-lunar-400">Throttle RF duty-cycle when Z-Stall occurs</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="toggle-autotune" checked class="sr-only peer">
+              <div class="w-10 h-5 bg-lunar-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+            </label>
+          </div>
+
+          <!-- Structural Yield Assessment -->
+          <div class="p-3.5 bg-lunar-950/80 border border-lunar-800 rounded-xl space-y-2 text-xs font-mono">
+            <div class="font-bold text-white flex justify-between items-center">
+              <span>Compressive Strength ($\sigma_{c}$):</span>
+              <span id="stat-strength" class="text-emerald-400 font-bold text-sm">1.2 MPa</span>
+            </div>
+            <div class="w-full bg-lunar-900 h-2 rounded-full overflow-hidden">
+              <div id="bar-strength" class="bg-emerald-500 h-full w-[4%] transition-all"></div>
+            </div>
+            <div class="flex justify-between text-[11px] text-lunar-400 pt-1">
+              <span>Internal Void Fraction: <strong id="stat-void" class="text-amber-300">48.0%</strong></span>
+              <span>Cracks: <strong id="stat-cracks" class="text-emerald-400">0</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Real-Time (E, Z) S-Curve Tracking Chart -->
+        <div class="bg-lunar-900/90 border border-lunar-800 p-5 rounded-2xl shadow-xl space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono text-cyan-400">
+              Live (E, Z) Sintering Track Auditor
+            </h3>
+            <span class="text-[10px] text-lunar-400 font-mono">Impedance ($Z$) vs Absorbed Energy ($E$)</span>
+          </div>
+
+          <div class="w-full h-44">
+            <canvas id="ezChart"></canvas>
+          </div>
+          <p class="text-[11px] text-lunar-400 leading-relaxed font-mono">
+            Dielectric loss tangent $\tan(\delta)$ induces an S-curve transition from $1250\,\Omega$ down to $85\,\Omega$. Deviations from the target trajectory trigger RF pulse shunting to collapse void pockets.
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Software Stack & Capabilities for Hardware Labs -->
+    <div class="mt-8 bg-gradient-to-r from-lunar-900 via-lunar-850 to-lunar-900 border border-amber-600/30 rounded-2xl p-6 sm:p-8">
+      <div class="max-w-3xl">
+        <span class="px-2.5 py-1 rounded bg-amber-950 text-amber-300 text-xs font-mono font-semibold">REGOMELT COMPUTATIONAL PLATFORM</span>
+        <h3 class="text-xl sm:text-2xl font-black text-white mt-2">What RegoMelt Delivers to Experimental ISRU Teams</h3>
+        <p class="text-sm text-lunar-300 mt-2 leading-relaxed">
+          We don't operate the vacuum kilns or machine the multi-mode waveguide cavities—we license and deploy the scientific multi-physics control software. We provide universities, NASA centers, and aerospace contractors with turnkey software kernels:
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 text-xs text-lunar-300 font-mono">
+        <div class="p-4 bg-lunar-950/80 border border-lunar-800 rounded-xl space-y-1.5">
+          <div class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">01</div>
+          <h4 class="font-bold text-white text-sm font-sans">Coupled EM-Thermal Solvers</h4>
+          <p class="text-lunar-400 leading-relaxed">Finite-difference time-domain (FDTD) electromagnetic and thermal solvers calculating non-linear temperature-dependent permittivity $\epsilon^*(T)$ up to 1600 K.</p>
+        </div>
+        <div class="p-4 bg-lunar-950/80 border border-lunar-800 rounded-xl space-y-1.5">
+          <div class="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold">02</div>
+          <h4 class="font-bold text-white text-sm font-sans">High-Speed DAQ &amp; Z-Auditing</h4>
+          <p class="text-lunar-400 leading-relaxed">Low-latency interface for vector network analyzers (VNAs), coaxial dielectric probes, and pyrometers with automated anomaly classification in <10 ms.</p>
+        </div>
+        <div class="p-4 bg-lunar-950/80 border border-lunar-800 rounded-xl space-y-1.5">
+          <div class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">03</div>
+          <h4 class="font-bold text-white text-sm font-sans">NASA SBIR Co-Submission</h4>
+          <p class="text-lunar-400 leading-relaxed">Complete technical writing, cost volume breakdown, multi-physics digital twins, and NASA proposal compliance ready for joint submission.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- TAB 2: FULL NASA SBIR PROPOSAL VIEWPORT ($225,000) -->
+  <section id="tab-proposal" class="tab-content hidden flex-1 max-w-4xl mx-auto w-full px-4 sm:px-8 py-8">
+    <div class="bg-white text-slate-900 rounded-2xl shadow-2xl border border-slate-200 p-6 sm:p-12 md:p-16">
+      
+      <!-- Toolbar inside Proposal -->
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b-2 border-slate-900 pb-5 mb-8">
+        <div>
+          <span class="text-xs font-mono font-bold uppercase tracking-wider text-amber-800 bg-amber-50 px-2.5 py-1 rounded border border-amber-200">
+            NASA SBIR/STTR Phase I Technical Proposal &bull; $225,000
+          </span>
+          <div class="text-[11px] text-slate-500 mt-1">Authored by RegoMelt Autonomous Microwave Systems &bull; Flight ISRU Division</div>
+        </div>
+
+        <div class="flex items-center gap-2 font-mono">
+          <button onclick="downloadProposalMarkdown()" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white transition flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            Download Markdown (.md)
+          </button>
+          <button onclick="window.print()" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 hover:bg-slate-50 text-slate-700 transition flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+            Print Proposal
+          </button>
+        </div>
+      </div>
+
+      <!-- Proposal Header Details -->
+      <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-snug">
+        RegoMelt: Real-Time High-Temperature Complex Impedance Auditor for Closed-Loop Microwave Sintering of In-Situ Lunar Regolith Landing Pads and Habitation Ceramics
+      </h1>
+
+      <div class="mt-4 pt-3 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs text-slate-600 font-mono">
+        <div><strong class="text-slate-900 font-sans">Topic Codes:</strong><br/>TX07.01 &amp; TX12.01</div>
+        <div><strong class="text-slate-900 font-sans">Period of Performance:</strong><br/>6 Months (Phase I)</div>
+        <div><strong class="text-slate-900 font-sans">Proposed Budget:</strong><br/>$225,000 (NASA Phase I)</div>
+        <div><strong class="text-slate-900 font-sans">Target TRL:</strong><br/>TRL 2 &rarr; TRL 4</div>
+      </div>
+
+      <!-- Executive Driving Mechanism -->
+      <div class="mt-8 bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-600 p-5 rounded-r-lg">
+        <h2 class="text-xs font-extrabold uppercase tracking-wider text-amber-900 mb-1.5 font-mono">Executive Driving Mechanism</h2>
+        <p class="text-sm font-medium text-slate-800 leading-relaxed">
+          The core innovation is a closed-loop multi-physics microwave cavity auditor that continuously tracks the non-linear high-temperature complex dielectric impedance trajectory $Z(E)$ against absorbed cumulative energy $E$ during the $2.45\,\text{GHz}$ sintering of lunar regolith containing nanophase metallic iron ($np\text{-}\text{Fe}^0$). By identifying plateaus in impedance shifts ("Z-Stalls") caused by trapped degassing pockets and thermal hotspots, the system dynamically modulates magnetron duty cycles and phase shifters to collapse internal voids and prevent thermal runaway cracking—guaranteeing structural compressive strength exceeding $\sigma_c > 30\,\text{MPa}$ for Artemis surface construction.
+        </p>
+      </div>
+
+      <!-- Section 1 -->
+      <div class="mt-8 space-y-4 text-sm text-slate-700 leading-relaxed">
+        <h2 class="text-base font-bold text-slate-900 uppercase tracking-wider border-b border-slate-200 pb-2">
+          1. Identification and Significance of the Innovation
+        </h2>
+        <p>
+          Sustainable permanence on the lunar surface under the Artemis campaign requires the autonomous construction of blast-resistant landing pads, radiation and micrometeorite shielding berms, and structural pressurized habitat envelopes. Launching prefabricated construction materials from Earth carries exorbitant logistical costs (historically $>\$50,000/\text{kg}$ to lunar transit). In-Situ Resource Utilization (ISRU) via raw regolith thermal consolidation is imperative.
+        </p>
+        <p>
+          However, conventional radiative and conductive surface heating suffers from the extremely low thermal conductivity of unprocessed lunar vacuum regolith ($k \approx 0.002 - 0.01\,\text{W/m}\cdot\text{K}$). Surface heating causes surface crusting and boil-off before the brick interior can consolidate. Microwave sintering at $2.45\,\text{GHz}$ bypasses this through volumetric heating: lunar regolith contains sub-micron nanophase metallic iron ($np\text{-}\text{Fe}^0$) dispersed within impact agglutinitic silicate glass, which exhibits massive dipolar loss and ferromagnetic resonance.
+        </p>
+        <p>
+          As microwave energy is absorbed, the material's complex dielectric permittivity $\epsilon^* = \epsilon' - j\epsilon''$ changes rapidly. The power dissipation per unit volume is governed by:
+        </p>
+        <div class="py-2 text-center text-sm font-mono bg-slate-50 rounded-lg">
+          $$P_{\text{diss}} = 2\pi f \epsilon_0 \epsilon'' |E_{\text{RMS}}|^2 = 2\pi f \epsilon_0 \epsilon' \tan(\delta) |E_{\text{RMS}}|^2$$
+        </div>
+        <p>
+          As the loose powder fuses into dense, non-porous basaltic ceramic glass ($>2.85\,\text{g/cm}^3$), its effective RF cavity impedance drops along a characteristic sigmoidal S-curve from $Z_{\text{initial}} \approx 1250\,\Omega$ to $Z_{\text{final}} \approx 85\,\Omega$. <strong>The fatal industry failure mode:</strong> internal degassing of entrapped volatile pockets or differential thermal gradients causes localized "Z-stalls"—impedance stops declining despite continued energy absorption. Existing open-loop systems fail to detect this, producing brittle blocks with internal voids and microcracks that fail catastrophically under rocket plume blast impingement.
+        </p>
+      </div>
+
+      <!-- Section 2 -->
+      <div class="mt-8 space-y-4 text-sm text-slate-700 leading-relaxed">
+        <h2 class="text-base font-bold text-slate-900 uppercase tracking-wider border-b border-slate-200 pb-2">
+          2. Phase I Technical Objectives ($225,000 Budget Allocation)
+        </h2>
+        <div class="grid grid-cols-1 gap-3">
+          <div class="p-4 bg-slate-50 border border-slate-200 rounded-lg">
+            <h3 class="font-bold text-slate-900 font-sans">Objective 1: Coupled FDTD Electromagnetic-Thermal Dynamic Kernel ($65,000)</h3>
+            <p class="text-xs text-slate-600 mt-1">Develop high-fidelity 3D numerical models correlating $np\text{-}\text{Fe}^0$ concentration (0.1–1.5 wt%) with complex impedance $Z$ and skin depth $\delta_p$ across temperatures from 295 K to 1600 K.</p>
+          </div>
+          <div class="p-4 bg-slate-50 border border-slate-200 rounded-lg">
+            <h3 class="font-bold text-slate-900 font-sans">Objective 2: Real-Time Closed-Loop Z-Stall &amp; Anomaly Detection ($55,000)</h3>
+            <p class="text-xs text-slate-600 mt-1">Code deterministic Kalman-filtered signal auditors evaluating live $dZ/dE$ gradients. Benchmark automatic RF power throttling to dissipate voids within a multi-mode cavity.</p>
+          </div>
+          <div class="p-4 bg-slate-50 border border-slate-200 rounded-lg">
+            <h3 class="font-bold text-slate-900 font-sans">Objective 3: Hardware Testbed Integration &amp; Simulant Verification ($75,000)</h3>
+            <p class="text-xs text-slate-600 mt-1">Deploy RegoMelt software onto partner laboratory instrumentation. Execute experimental sintering runs with LHS-1 and LMS-1 lunar simulants in a vacuum chamber ($10^{-4}\,\text{Torr}$).</p>
+          </div>
+          <div class="p-4 bg-slate-50 border border-slate-200 rounded-lg">
+            <h3 class="font-bold text-slate-900 font-sans">Objective 4: NASA Artemis Flight Tooling Architecture Blueprint ($30,000)</h3>
+            <p class="text-xs text-slate-600 mt-1">Complete commercialization roadmap and flight-ready avionics architecture for an autonomous rover-mounted mobile microwave sintering paver.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 3 -->
+      <div class="mt-8 space-y-4 text-sm text-slate-700 leading-relaxed">
+        <h2 class="text-base font-bold text-slate-900 uppercase tracking-wider border-b border-slate-200 pb-2">
+          3. Work Plan, Milestones &amp; Deliverables
+        </h2>
+        <table class="w-full text-xs text-left border border-slate-200 rounded-lg overflow-hidden">
+          <thead class="bg-slate-100 font-mono text-slate-700">
+            <tr>
+              <th class="p-2.5">Milestone</th>
+              <th class="p-2.5">Month</th>
+              <th class="p-2.5">Technical Deliverable</th>
+              <th class="p-2.5">Success Metric</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200 font-mono">
+            <tr>
+              <td class="p-2.5 font-bold">M1: Model Validation</td>
+              <td class="p-2.5">M2</td>
+              <td class="p-2.5 font-sans">Calibrated (E, Z) S-Curve solver against published Apollo sample permittivity data.</td>
+              <td class="p-2.5 text-emerald-700 font-bold">&Delta;Z < 5% error</td>
+            </tr>
+            <tr>
+              <td class="p-2.5 font-bold">M2: Algorithm Deploy</td>
+              <td class="p-2.5">M4</td>
+              <td class="p-2.5 font-sans">Real-time closed-loop daemon interfacing with 2.45 GHz directional couplers and pyrometry.</td>
+              <td class="p-2.5 text-emerald-700 font-bold">< 10 ms latency</td>
+            </tr>
+            <tr>
+              <td class="p-2.5 font-bold">M3: Physical Sintering</td>
+              <td class="p-2.5">M5</td>
+              <td class="p-2.5 font-sans">Sintered 20x10x10 cm interlocking simulant blocks under vacuum conditions.</td>
+              <td class="p-2.5 text-emerald-700 font-bold">&sigma;_c > 30 MPa, 0 voids</td>
+            </tr>
+            <tr>
+              <td class="p-2.5 font-bold">M4: Final Report</td>
+              <td class="p-2.5">M6</td>
+              <td class="p-2.5 font-sans">Comprehensive Phase I Final Report, Phase II Prototype Design, and Commercial IP file.</td>
+              <td class="p-2.5 text-emerald-700 font-bold">TRL 4 Certified</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Institutional Division of Labor -->
+      <div class="mt-8 p-5 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-amber-900 font-mono">Institutional Division of Labor (The Collaboration Model)</h3>
+        <p class="text-xs text-slate-700 leading-relaxed font-sans">
+          <strong>RegoMelt (Software Lead / Small Business):</strong> Mathematical formulation, electromagnetic-thermal FDTD solver, real-time closed-loop tuning logic, user telemetry interface, and NASA SBIR reporting.<br/>
+          <strong>Partner Hardware Lab (University / National Lab / Aerospace Co-Investigator):</strong> $2.45\,\text{GHz}$ multi-mode cavity with vacuum chamber ($10^{-4}\,\text{Torr}$), directional couplers for forward/reflected power, high-temperature coaxial dielectrometry probes, and ASTM C39 compressive stress testing apparatus.
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- TAB 3: HARDWARE LAB PARTNERSHIP PORTAL -->
+  <section id="tab-partnership" class="tab-content hidden flex-1 max-w-5xl mx-auto w-full px-4 sm:px-8 py-8 space-y-8">
+    
+    <div class="bg-gradient-to-r from-lunar-900 via-lunar-850 to-amber-950/40 border border-amber-500/30 rounded-2xl p-6 sm:p-10 shadow-2xl relative overflow-hidden">
+      <div class="max-w-2xl relative z-10">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-mono font-medium mb-3">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          OPEN CALL FOR NASA SBIR/STTR HARDWARE CO-APPLICANTS
+        </div>
+        <h2 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+          Are You an RF Cavity, High-Temp Materials, or ISRU Lab?
+        </h2>
+        <p class="mt-3 text-sm text-lunar-300 leading-relaxed">
+          <strong>RegoMelt</strong> provides the multi-physics control software, high-speed DAQ algorithms, and complete NASA technical proposal drafting. We are actively seeking co-investigator labs with physical microwave sintering apparatus to jointly submit and execute funded NASA Phase I &amp; Phase II contracts.
+        </p>
+      </div>
+
+      <div class="absolute -right-16 -bottom-16 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+    </div>
+
+    <!-- What We Bring vs What You Bring -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="bg-lunar-900/90 border border-lunar-800 p-6 rounded-2xl space-y-4">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold font-mono">SW</div>
+          <h3 class="font-bold text-white text-base">What RegoMelt Supplies</h3>
+        </div>
+        <ul class="space-y-2.5 text-xs text-lunar-300">
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            <span>Complete NASA SBIR/STTR Phase I proposal drafting, cost volumes, and compliance deliverables.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            <span>Coupled EM-thermal FDTD multi-physics digital twin calibrated for lunar simulant mineralogy.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            <span>Deterministic real-time closed-loop Z-Stall detection &amp; magnetron auto-tuning software daemon.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            <span>Turnkey integration with LabVIEW, MATLAB, Python, and industrial SCADA DAQ channels.</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="bg-lunar-900/90 border border-lunar-800 p-6 rounded-2xl space-y-4">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold font-mono">HW</div>
+          <h3 class="font-bold text-white text-base">What Your Hardware Lab Brings</h3>
+        </div>
+        <ul class="space-y-2.5 text-xs text-lunar-300">
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            <span>Multi-mode or single-mode 2.45 GHz microwave cavity with vacuum chamber interface.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            <span>Dual directional couplers for forward and reflected power telemetry ($P_f, P_r$).</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            <span>LHS-1 / LMS-1 lunar simulant batch handling with controlled moisture vacuum desiccation.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            <span>Post-sintering mechanical load test frame for ASTM C39 compressive strength certification.</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Direct Email Inquiry Card -->
+    <div class="bg-lunar-900/90 border border-lunar-800 rounded-2xl p-8 sm:p-12 text-center space-y-6 shadow-xl">
+      <div class="w-14 h-14 mx-auto rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+      </div>
+
+      <div class="max-w-xl mx-auto space-y-3">
+        <h3 class="text-xl sm:text-2xl font-bold text-white tracking-tight">ISRU Lab Partnership Inquiry</h3>
+        <p class="text-xs sm:text-sm text-lunar-400 leading-relaxed">
+          Ready to partner on co-authored NASA SBIR/STTR proposals, integrate our closed-loop $(E, Z)$ impedance kernel into your microwave kiln, or evaluate simulant test specimens? Connect with our team:
+        </p>
+        
+        <div class="pt-3">
+          <a href="mailto:support@rfwavecode.com" 
+             class="inline-flex items-center gap-3 px-6 py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-black font-mono font-bold text-sm sm:text-base shadow-lg shadow-amber-600/30 transition transform hover:-translate-y-0.5">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.206"/></svg>
+            <span>support@rfwavecode.com</span>
+          </a>
+        </div>
+        <p class="text-[11px] text-lunar-400 font-mono">
+          Response turnaround within 24 hours &bull; Mutual non-disclosure agreements (NDAs) available immediately
+        </p>
+      </div>
+    </div>
+
+    <!-- Document Footer -->
+    <footer class="pt-6 border-t border-lunar-800 flex flex-wrap items-center justify-between gap-3 text-xs text-lunar-400 font-mono">
+      <span>RegoMelt &bull; Lunar Regolith Microwave Sintering Auditor</span>
+      <span>Direct Contact: <a href="mailto:support@rfwavecode.com" class="text-amber-400 hover:underline">support@rfwavecode.com</a></span>
+    </footer>
+  </section>
+
+  <!-- Complete Application & Simulation Scripts -->
+  <script>
+    // Tab Navigation Controller
+    function switchTab(tabId) {
+      const tabs = ['simulation', 'proposal', 'partnership'];
+      tabs.forEach(id => {
+        const tabEl = document.getElementById('tab-' + id);
+        const desktopBtn = document.getElementById('tabBtn-' + id);
+        const mobileBtn = document.getElementById('mTabBtn-' + id);
+
+        if (id === tabId) {
+          if (tabEl) tabEl.classList.remove('hidden');
+          if (desktopBtn) {
+            desktopBtn.className = 'px-4 py-2 rounded-lg bg-amber-500 text-black font-semibold shadow-sm transition flex items-center gap-1.5';
+          }
+          if (mobileBtn) {
+            mobileBtn.className = 'px-3 py-1.5 rounded-lg bg-amber-500 text-black font-bold whitespace-nowrap';
+          }
+        } else {
+          if (tabEl) tabEl.classList.add('hidden');
+          if (desktopBtn) {
+            desktopBtn.className = 'px-4 py-2 rounded-lg text-lunar-300 hover:text-white hover:bg-lunar-800/60 transition flex items-center gap-1.5';
+          }
+          if (mobileBtn) {
+            mobileBtn.className = 'px-3 py-1.5 rounded-lg text-lunar-300 hover:bg-lunar-800 whitespace-nowrap';
+          }
+        }
+      });
+
+      // Resize 3D renderer if switching to simulation tab
+      if (tabId === 'simulation' && window.renderer && window.camera) {
+        setTimeout(onWindowResize, 60);
+      }
+    }
+
+    // Toast Notification Banner
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      if (!toast || !toastMsg) return;
+      toastMsg.textContent = message;
+      toast.classList.remove('opacity-0', 'translate-y-20', 'pointer-events-none');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-20', 'pointer-events-none');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 3400);
+    }
+
+    // Markdown Proposal Content for Direct Export
+    const markdownProposalText = `# NASA SBIR/STTR Phase I Technical Proposal ($225,000)
+
+**Project Title:** RegoMelt: Real-Time High-Temperature Complex Impedance Auditor for Closed-Loop Microwave Sintering of In-Situ Lunar Regolith Landing Pads and Habitation Ceramics  
+**Topic Codes:** TX07.01 (In-Situ Resource Utilization) & TX12.01 (In-Space Manufacturing)  
+**Period of Performance:** 6 Months  
+**Proposed Budget:** $225,000 (NASA Phase I Maximum Award)  
+**Target Readiness:** TRL 2 to TRL 4  
+**Primary Contact:** support@rfwavecode.com  
+
+---
+
+## Executive Driving Mechanism
+The core innovation is a closed-loop multi-physics microwave cavity auditor that continuously tracks the non-linear high-temperature complex dielectric impedance trajectory Z(E) against absorbed cumulative energy E during the 2.45 GHz sintering of lunar regolith containing nanophase metallic iron (np-Fe0). By identifying plateaus in impedance shifts ("Z-Stalls") caused by trapped degassing pockets and thermal hotspots, the system dynamically modulates magnetron duty cycles and phase shifters to collapse internal voids and prevent thermal runaway cracking—guaranteeing structural compressive strength exceeding 30 MPa for Artemis surface construction.
+
+---
+
+## 1. Identification and Significance of the Innovation
+Lunar regolith's vacuum thermal conductivity is remarkably low (k ≈ 0.002 - 0.01 W/m·K), rendering conventional surface radiative heating inefficient and prone to surface boil-off before internal powder consolidation. In contrast, 2.45 GHz microwaves penetrate volumetrically due to the presence of sub-micron nanophase metallic iron (np-Fe0) within impact agglutinitic silicate glass.
+
+As microwave energy dissolves grain boundaries, the complex dielectric impedance drops along a non-linear sigmoidal S-curve from Z_initial ≈ 1250 Ω down to Z_final ≈ 85 Ω. RegoMelt audits this dZ/dE derivative continuously to detect void formations in real-time, executing adaptive RF pulse shunting to yield certified, crack-free basalt ceramic tiles.
+
+## 2. Phase I Technical Objectives ($225,000 Total Allocation)
+* **Objective 1 ($65,000):** Coupled FDTD Electromagnetic-Thermal Dynamic Kernel (Months 1-2).
+* **Objective 2 ($55,000):** Real-Time Closed-Loop Z-Stall & Anomaly Detection Algorithm (Months 2-4).
+* **Objective 3 ($75,000):** Hardware Testbed Integration & Lunar Simulant Vacuum Verification (Months 3-5).
+* **Objective 4 ($30,000):** Phase II Scale-Up Blueprint & Autonomous Surface Paver Architecture (Month 6).
+
+## 3. Institutional Division of Labor
+* **RegoMelt (Software Lead):** Multi-physics algorithms, high-temperature dielectric models, real-time closed-loop tuning logic, user telemetry interface, and NASA SBIR reporting.
+* **Partner Hardware Lab:** 2.45 GHz multi-mode test cavity, vacuum chamber (10^-4 Torr), directional couplers, high-temp coaxial dielectrometry probes, and ASTM C39 mechanical load testing.
+
+Contact: support@rfwavecode.com
+`;
+
+    function downloadProposalMarkdown() {
+      const blob = new Blob([markdownProposalText], { type: 'text/markdown;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'NASA_SBIR_Phase_I_RegoMelt_Proposal.md';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast('Downloaded NASA SBIR Markdown proposal template.');
+    }
+
+    // --- Multi-Physics Sintering Simulation Engine ---
+    let simState = {
+      time: 0,
+      energy: 0,               // kJ/cm³
+      impedance: 1250.0,       // Ω
+      targetZ: 1250.0,
+      temp: 295,               // K
+      density: 1.45,           // g/cm³
+      strength: 1.2,           // MPa
+      voidFraction: 48.0,      // %
+      cracks: 0,
+      ironContent: 0.58,       // wt% np-Fe0
+      power: 3.2,              // kW
+      dutyCycle: 100,          // %
+      activeAnomaly: null,     // 'void', 'runaway', or null
+      isRunning: true
+    };
+
+    const Z_INITIAL = 1250.0;
+    const Z_FINAL = 85.0;
+    const E_INFLECTION_BASE = 2.4; // kJ/cm³
+    const S_STEEPNESS = 2.8;
+
+    function calculateTargetZ(e, iron) {
+      const mid = E_INFLECTION_BASE / (0.8 + iron * 0.4);
+      return Z_FINAL + (Z_INITIAL - Z_FINAL) / (1 + Math.exp(S_STEEPNESS * (e - mid)));
+    }
+
+    function updateMineralogy() {
+      const iron = parseFloat(document.getElementById('slider-iron').value);
+      simState.ironContent = iron;
+      document.getElementById('val-iron').innerText = `${iron.toFixed(2)} wt%`;
+      buildChartIdealReference();
+      showToast(`Mineral simulant updated: np-Fe⁰ = ${iron.toFixed(2)} wt%`);
+    }
+
+    function updatePower() {
+      const power = parseFloat(document.getElementById('slider-power').value);
+      simState.power = power;
+      document.getElementById('val-power').innerText = `${power.toFixed(1)} kW`;
+    }
+
+    function injectAnomaly(type) {
+      simState.activeAnomaly = type;
+      if (type === 'void') {
+        showToast('ANOMALY: Trapped volatile degassing pocket injected (Z-Stall induced)');
+      } else if (type === 'runaway') {
+        showToast('CRITICAL: Thermal runaway condition initiated at workpiece core!');
+      }
+    }
+
+    function resetSimulation() {
+      simState.time = 0;
+      simState.energy = 0;
+      simState.impedance = Z_INITIAL;
+      simState.targetZ = Z_INITIAL;
+      simState.temp = 295;
+      simState.density = 1.45;
+      simState.strength = 1.2;
+      simState.voidFraction = 48.0;
+      simState.cracks = 0;
+      simState.dutyCycle = 100;
+      simState.activeAnomaly = null;
+
+      if (ezChart) {
+        ezChart.data.datasets[1].data = [];
+        ezChart.update();
+      }
+      showToast('Cavity purged & fresh lunar simulant batch loaded.');
+      updateSimulationHUD();
+    }
+
+    // --- Chart.js Setup for (E, Z) Tracking ---
+    let ezChart;
+    function initChart() {
+      const ctx = document.getElementById('ezChart').getContext('2d');
+      if (!ctx) return;
+
+      ezChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          datasets: [
+            {
+              label: 'Ideal S-Curve Target',
+              data: [],
+              borderColor: 'rgba(148, 163, 184, 0.4)',
+              borderDash: [4, 4],
+              borderWidth: 2,
+              pointRadius: 0,
+              fill: false,
+              tension: 0.3
+            },
+            {
+              label: 'Actual (E, Z) Track',
+              data: [],
+              borderColor: '#06b6d4',
+              backgroundColor: 'rgba(6, 182, 212, 0.1)',
+              borderWidth: 2.5,
+              pointBackgroundColor: '#f59e0b',
+              pointBorderColor: '#ffffff',
+              pointRadius: (ctx) => (ctx.dataIndex === ctx.dataset.data.length - 1 ? 5 : 0),
+              fill: false,
+              tension: 0.1
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 0 },
+          scales: {
+            x: {
+              type: 'linear',
+              min: 0,
+              max: 5.0,
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 9 } }
+            },
+            y: {
+              min: 0,
+              max: 1350,
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 9 } }
+            }
+          },
+          plugins: {
+            legend: { display: false }
+          }
+        }
+      });
+
+      buildChartIdealReference();
+    }
+
+    function buildChartIdealReference() {
+      if (!ezChart) return;
+      const refPoints = [];
+      for (let e = 0; e <= 5.0; e += 0.1) {
+        refPoints.push({ x: parseFloat(e.toFixed(2)), y: calculateTargetZ(e, simState.ironContent) });
+      }
+      ezChart.data.datasets[0].data = refPoints;
+      ezChart.update();
+    }
+
+    // --- Physics Tick Execution ---
+    function stepPhysics(dt) {
+      if (!simState.isRunning) return;
+
+      simState.time += dt;
+      simState.targetZ = calculateTargetZ(simState.energy, simState.ironContent);
+
+      const effectivePower = simState.power * (simState.dutyCycle / 100);
+      const absorbFactor = 0.82 + (simState.ironContent * 0.18);
+      const dE = (effectivePower * dt * 0.04) * absorbFactor;
+      simState.energy = Math.min(5.0, simState.energy + dE);
+
+      const autotuneActive = document.getElementById('toggle-autotune').checked;
+
+      // Sintering Dynamics & Anomaly branches
+      if (simState.activeAnomaly === 'void') {
+        // Z-STALL: Impedance stops declining despite growing energy
+        simState.impedance += (Math.random() - 0.49) * 1.4;
+        const err = Math.abs(simState.impedance - simState.targetZ);
+
+        if (err > 90) {
+          if (autotuneActive) {
+            // Pulse microwave duty cycle to collapse void
+            simState.dutyCycle = Math.max(30, simState.dutyCycle - 20 * dt);
+            if (Math.random() < 0.22) {
+              simState.activeAnomaly = null;
+              showToast('Auto-Tune: Microwave pulse shunting collapsed internal void pocket!');
+            }
+          } else {
+            // Uncorrected void produces microcracks
+            simState.voidFraction = Math.min(58, simState.voidFraction + 0.9 * dt);
+            if (Math.random() < 0.08) {
+              simState.cracks++;
+            }
+          }
+        }
+      } else if (simState.activeAnomaly === 'runaway') {
+        // Thermal runaway spike
+        simState.impedance = Math.max(10, simState.impedance - 190 * dt);
+        simState.temp += 240 * dt;
+
+        if (autotuneActive) {
+          simState.dutyCycle = 15; // Cut power drastically
+          showToast('CRITICAL: Magnetron duty cycle throttled to 15% to quench runaway hotspot!');
+          simState.activeAnomaly = null;
+        } else {
+          simState.cracks += 2;
+        }
+      } else {
+        // Normal S-Curve tracking
+        if (simState.dutyCycle < 100) {
+          simState.dutyCycle = Math.min(100, simState.dutyCycle + 25 * dt);
+        }
+        const zStep = (simState.targetZ - simState.impedance) * 0.16;
+        simState.impedance += zStep + (Math.random() - 0.5) * 1.2;
+      }
+
+      // Density, Temperature & Strength Calculations
+      const consolidationRatio = Math.max(0, (Z_INITIAL - simState.impedance) / (Z_INITIAL - Z_FINAL));
+      simState.density = 1.45 + (1.45 * Math.pow(consolidationRatio, 1.25));
+      simState.temp = 295 + (1190 * Math.pow(consolidationRatio, 0.95));
+      simState.voidFraction = Math.max(2.0, 48.0 * (1 - consolidationRatio));
+
+      if (simState.cracks > 0) {
+        simState.strength = Math.max(0.4, (simState.density * simState.density * 4.5) - (simState.cracks * 6.2));
+      } else {
+        simState.strength = Math.min(84.0, 1.2 + Math.pow(consolidationRatio * 4.3, 2.7));
+      }
+
+      // Record to chart dataset
+      if (ezChart) {
+        ezChart.data.datasets[1].data.push({
+          x: parseFloat(simState.energy.toFixed(2)),
+          y: parseFloat(simState.impedance.toFixed(1))
+        });
+        if (ezChart.data.datasets[1].data.length > 60) {
+          ezChart.data.datasets[1].data.shift();
+        }
+        ezChart.update('none');
+      }
+
+      updateSimulationHUD();
+      update3DVisuals();
+    }
+
+    function updateSimulationHUD() {
+      document.getElementById('hud-temp').innerText = `${Math.round(simState.temp)} K`;
+      document.getElementById('hud-energy').innerText = `${simState.energy.toFixed(2)} kJ/cm³`;
+      document.getElementById('hud-impedance').innerText = `${simState.impedance.toFixed(1)} Ω`;
+      document.getElementById('hud-density').innerText = `${simState.density.toFixed(2)} g/cm³`;
+
+      const statusEl = document.getElementById('hud-status');
+      if (simState.activeAnomaly === 'void') {
+        statusEl.innerText = 'Z-STALL (VOID FORMED)';
+        statusEl.className = 'text-amber-400 font-bold animate-pulse';
+      } else if (simState.activeAnomaly === 'runaway') {
+        statusEl.innerText = 'THERMAL RUNAWAY FLASH';
+        statusEl.className = 'text-rose-400 font-bold animate-pulse';
+      } else {
+        statusEl.innerText = 'RESONANCE NOMINAL';
+        statusEl.className = 'text-emerald-400 font-bold';
+      }
+
+      document.getElementById('stat-strength').innerText = `${simState.strength.toFixed(1)} MPa`;
+      const strengthPct = Math.min(100, (simState.strength / 40.0) * 100);
+      document.getElementById('bar-strength').style.width = `${strengthPct}%`;
+      document.getElementById('stat-void').innerText = `${simState.voidFraction.toFixed(1)}%`;
+      document.getElementById('stat-cracks').innerText = simState.cracks;
+      document.getElementById('stat-cracks').className = simState.cracks > 0 ? 'text-rose-400 font-bold' : 'text-emerald-400';
+    }
+
+    // --- Three.js 3D Electromagnetic Cavity Simulation ---
+    let scene, camera, renderer, cavityGroup, brickMesh, standingWaves = [];
+    let isMouseDown = false, mouseX = 0, mouseY = 0;
+
+    function init3D() {
+      const container = document.getElementById('three-container');
+      if (!container) return;
+
+      const width = container.clientWidth || 600;
+      const height = container.clientHeight || 420;
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x05070e);
+
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+      camera.position.set(0, 5.5, 9.5);
+      camera.lookAt(0, 0, 0);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      container.appendChild(renderer.domElement);
+
+      // Cavity Lighting
+      const ambLight = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambLight);
+
+      const dirLight = new THREE.DirectionalLight(0xf59e0b, 1.4);
+      dirLight.position.set(5, 8, 5);
+      scene.add(dirLight);
+
+      const cyanFill = new THREE.DirectionalLight(0x06b6d4, 0.8);
+      cyanFill.position.set(-6, -4, -4);
+      scene.add(cyanFill);
+
+      cavityGroup = new THREE.Group();
+
+      // Outer Microwave Resonant Cavity (Wireframe Cage)
+      const cageGeo = new THREE.BoxGeometry(6.4, 4.4, 5.4);
+      const cageWire = new THREE.WireframeGeometry(cageGeo);
+      const cageLine = new THREE.LineSegments(cageWire, new THREE.LineBasicMaterial({ color: 0x27344f }));
+      cavityGroup.add(cageLine);
+
+      // Waveguide Feed Horn (Magnetron Launcher Port)
+      const feedGeo = new THREE.BoxGeometry(1.2, 0.8, 1.6);
+      const feedMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8, roughness: 0.3 });
+      const feedMesh = new THREE.Mesh(feedGeo, feedMat);
+      feedMesh.position.set(0, 2.5, 0);
+      cavityGroup.add(feedMesh);
+
+      // Workpiece Lunar Brick (Regolith Mold)
+      const brickGeo = new THREE.BoxGeometry(3.6, 1.8, 2.2, 16, 8, 12);
+      const brickMat = new THREE.MeshStandardMaterial({
+        color: 0x1e293b,
+        roughness: 0.85,
+        metalness: 0.2
+      });
+      brickMesh = new THREE.Mesh(brickGeo, brickMat);
+      cavityGroup.add(brickMesh);
+
+      // Microwave Standing Wave Standing Field Nodes
+      for (let i = 0; i < 4; i++) {
+        const ringGeo = new THREE.TorusGeometry(1.6 + i * 0.35, 0.02, 8, 36);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: 0x06b6d4,
+          transparent: true,
+          opacity: 0.45
+        });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = (i - 1.5) * 0.7;
+        standingWaves.push(ring);
+        cavityGroup.add(ring);
+      }
+
+      scene.add(cavityGroup);
+
+      // Mouse Drag Rotation Listeners
+      container.addEventListener('mousedown', (e) => {
+        isMouseDown = true;
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+      });
+
+      window.addEventListener('mouseup', () => { isMouseDown = false; });
+
+      container.addEventListener('mousemove', (e) => {
+        if (!isMouseDown) return;
+        const deltaX = e.clientX - mouseX;
+        const deltaY = e.clientY - mouseY;
+        cavityGroup.rotation.y += deltaX * 0.008;
+        cavityGroup.rotation.x += deltaY * 0.008;
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+      });
+
+      // Touch Drag Listeners for Mobile
+      let touchX = 0, touchY = 0;
+      container.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          touchX = e.touches[0].clientX;
+          touchY = e.touches[0].clientY;
+        }
+      }, { passive: true });
+
+      container.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 1) {
+          const deltaX = e.touches[0].clientX - touchX;
+          const deltaY = e.touches[0].clientY - touchY;
+          cavityGroup.rotation.y += deltaX * 0.01;
+          cavityGroup.rotation.x += deltaY * 0.01;
+          touchX = e.touches[0].clientX;
+          touchY = e.touches[0].clientY;
+        }
+      }, { passive: true });
+
+      window.addEventListener('resize', onWindowResize);
+      animate3D();
+    }
+
+    function onWindowResize() {
+      const container = document.getElementById('three-container');
+      if (!container || !renderer || !camera) return;
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
+    }
+
+    function update3DVisuals() {
+      if (!brickMesh) return;
+
+      // Color interpolate brick as it consolidates from raw grey-blue dust to amber molten glass
+      const tNorm = Math.min(1, Math.max(0, (simState.temp - 295) / (1450 - 295)));
+      
+      if (tNorm < 0.35) {
+        brickMesh.material.color.setHex(0x1e293b); // Cold powder
+      } else if (tNorm < 0.75) {
+        brickMesh.material.color.setHex(0xd97706); // Sintering amber
+      } else {
+        brickMesh.material.color.setHex(0xea580c); // Dense fused basalt glass
+      }
+
+      // Standing wave oscillation
+      standingWaves.forEach((ring, idx) => {
+        const pulse = 1 + 0.1 * Math.sin(Date.now() * 0.004 + idx);
+        ring.scale.set(pulse, pulse, 1);
+        if (simState.activeAnomaly === 'void') {
+          ring.material.color.setHex(0xf59e0b); // Perturbed impedance
+        } else {
+          ring.material.color.setHex(0x06b6d4); // Nominal standing wave
+        }
+      });
+    }
+
+    function animate3D() {
+      requestAnimationFrame(animate3D);
+      if (cavityGroup && !isMouseDown) {
+        cavityGroup.rotation.y += 0.003;
+      }
+      if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+      }
+    }
+
+    // Initialize application on load
+    window.addEventListener('DOMContentLoaded', () => {
+      init3D();
+      initChart();
+      updateSimulationHUD();
+
+      // Physics loop at 100ms
+      setInterval(() => {
+        stepPhysics(0.1);
+      }, 100);
+    });
+  </script>
+</body>
+</html>
